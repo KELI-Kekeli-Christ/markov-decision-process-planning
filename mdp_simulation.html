@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MDP Grid World — Christ KELI</title>
+<style>
+  :root {
+    --bg:     #0f0f1a;
+    --panel:  #16213e;
+    --cell:   #1a2744;
+    --border: #2a3a6e;
+    --accent: #00d4ff;
+    --green:  #00ff9f;
+    --yellow: #ffd700;
+    --red:    #ff4757;
+    --purple: #c084fc;
+    --white:  #e8e8ff;
+    --muted:  #7a88bb;
+    --shadow: rgba(0,212,255,0.35);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--white);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 20px; position: relative;
+  }
+
+  /* ── Author badge ───────────────────────────────────────── */
+  #author {
+    position: absolute; top: 14px; right: 20px; text-align: right; line-height: 1.5;
+  }
+  #author .name { font-size: 0.95rem; font-weight: bold; color: var(--accent); letter-spacing: 1px; }
+  #author .info { font-size: 0.72rem; color: var(--muted); }
+
+  h1 {
+    font-size: 1.5rem; letter-spacing: 2px; color: var(--accent);
+    text-shadow: 0 0 20px var(--shadow); margin-bottom: 6px; text-align: center;
+  }
+  .subtitle { color: var(--muted); font-size: 0.85rem; margin-bottom: 18px; text-align: center; }
+
+  /* ── Algorithm selector ─────────────────────────────────── */
+  #algo-selector {
+    display: flex; gap: 0; margin-bottom: 20px;
+    border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+  }
+  .algo-btn {
+    padding: 10px 28px; cursor: pointer; font-size: 0.92rem; font-weight: bold;
+    border: none; outline: none; transition: background 0.25s, color 0.25s;
+    background: var(--cell); color: var(--muted);
+  }
+  .algo-btn.active-vi  { background: var(--accent); color: #000; }
+  .algo-btn.active-pi  { background: var(--purple); color: #000; }
+  .algo-btn:first-child { border-right: 1px solid var(--border); }
+
+  /* ── Comparison badge ────────────────────────────────────── */
+  #cmp-bar {
+    display: flex; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; justify-content: center;
+  }
+  .cmp-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 18px; font-size: 0.82rem; min-width: 160px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .cmp-card .cmp-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+  .cmp-card .cmp-val   { font-size: 1.1rem; font-weight: bold; }
+  .cmp-card.vi-card  { border-color: var(--accent); }
+  .cmp-card.pi-card  { border-color: var(--purple); }
+  .cmp-card.eq-card  { border-color: var(--green); }
+  .vi-color { color: var(--accent); }
+  .pi-color { color: var(--purple); }
+  .eq-color { color: var(--green); }
+
+  /* ── Main layout ─────────────────────────────────────────── */
+  .main { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+
+  /* ── Grid ────────────────────────────────────────────────── */
+  #grid-wrap {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 20px;
+    box-shadow: 0 0 40px rgba(0,212,255,0.08);
+  }
+  #grid-title {
+    font-size: 0.9rem; color: var(--muted); margin-bottom: 14px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  #algo-tag {
+    border-radius: 999px; padding: 2px 12px;
+    font-size: 0.8rem; font-weight: bold; color: #000;
+    background: var(--accent); transition: background 0.3s;
+  }
+  #episode-badge {
+    border-radius: 999px; padding: 2px 10px;
+    font-size: 0.8rem; font-weight: bold; color: #000;
+    background: var(--yellow);
+  }
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(4, 110px);
+    grid-template-rows: repeat(3, 100px);
+    gap: 6px;
+  }
+  .cell {
+    border-radius: 10px; border: 2px solid var(--border);
+    position: relative; cursor: default;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .cell .coords   { position: absolute; top: 4px; left: 6px; font-size: 0.6rem; color: rgba(255,255,255,0.35); }
+  .cell .v-star   { font-size: 0.75rem; font-weight: bold; color: white; text-shadow: 0 1px 4px #000; margin-bottom: 2px; }
+  .cell .arrow    { font-size: 1.6rem; line-height: 1; text-shadow: 0 2px 6px #000; }
+  .cell .rew-lbl  { position: absolute; bottom: 5px; font-size: 0.72rem; font-weight: bold; }
+  .cell.obstacle  { background: #1c1c2e !important; border-color: #333 !important; }
+  .cell.obstacle .label { font-size: 0.8rem; color: #555; font-weight: bold; }
+  .cell.goal      { border-width: 3px; }
+  .cell.trap      { border-color: var(--red) !important; border-width: 3px; }
+  .cell.robot     { box-shadow: 0 0 24px var(--shadow); }
+  .cell.visited   { opacity: 0.72; }
+
+  .robot-icon {
+    position: absolute; font-size: 2rem; z-index: 10;
+    filter: drop-shadow(0 0 8px var(--accent));
+    animation: pulse .8s ease-in-out infinite alternate;
+  }
+  @keyframes pulse {
+    from { transform: scale(1);    filter: drop-shadow(0 0 8px var(--accent)); }
+    to   { transform: scale(1.12); filter: drop-shadow(0 0 16px var(--accent)); }
+  }
+
+  /* ── Stats panel ─────────────────────────────────────────── */
+  #stats-panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 20px; width: 240px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .stat-block { display: flex; flex-direction: column; gap: 6px; }
+  .stat-block h3 {
+    font-size: 0.72rem; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 1.5px; border-bottom: 1px solid var(--border); padding-bottom: 4px;
+  }
+  .stat-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.88rem; }
+  .stat-row .lbl { color: var(--muted); font-size: 0.8rem; }
+  .stat-row .val { font-weight: bold; }
+  .va { color: var(--accent); } .vg { color: var(--green); }
+  .vy { color: var(--yellow); } .vr { color: var(--red);   }
+  .vp { color: var(--purple); } .vw { color: var(--white); }
+
+  #reward-bar-bg { width:100%; height:8px; background:#2a2a4a; border-radius:4px; overflow:hidden; }
+  #reward-bar    { height:100%; border-radius:4px; transition: width .4s, background .4s; }
+
+  .goal-msg {
+    text-align:center; padding:8px;
+    background: rgba(255,215,0,0.1); border: 1px solid var(--yellow);
+    border-radius:8px; font-weight:bold; color:var(--yellow); font-size:0.9rem; display:none;
+  }
+
+  /* ── Controls ────────────────────────────────────────────── */
+  #controls {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 16px 24px; margin-top: 16px;
+    display: flex; gap: 16px; align-items: center; flex-wrap: wrap; justify-content: center;
+  }
+  button {
+    background: var(--cell); border: 1px solid var(--border); color: var(--white);
+    border-radius: 8px; padding: 8px 18px; cursor: pointer; font-size: 0.9rem;
+    transition: background .2s, border-color .2s, box-shadow .2s;
+  }
+  button:hover { border-color: var(--accent); box-shadow: 0 0 10px var(--shadow); }
+  #btn-play  { background: var(--accent); color: #000; font-weight: bold; border-color: var(--accent); }
+  #btn-play:hover { background: #00b8d9; }
+  .ctrl-group { display:flex; flex-direction:column; gap:4px; font-size:0.8rem; color:var(--muted); }
+  .ctrl-group input[type=range] { width:120px; accent-color: var(--accent); }
+  .ctrl-group label { display:flex; justify-content:space-between; }
+
+  /* ── Legend ──────────────────────────────────────────────── */
+  #legend {
+    margin-top:14px; display:flex; gap:18px; font-size:0.78rem;
+    color:var(--muted); flex-wrap:wrap; justify-content:center;
+  }
+  .leg-item  { display:flex; align-items:center; gap:5px; }
+  .leg-color { width:14px; height:14px; border-radius:3px; border:1px solid #555; }
+
+  /* ── Footer ──────────────────────────────────────────────── */
+  #footer {
+    margin-top:28px; padding:14px 28px;
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:12px; text-align:center; font-size:0.8rem;
+    color:var(--muted); line-height:1.8;
+  }
+</style>
+</head>
+<body>
+
+<!-- Author -->
+<div id="author">
+  <div class="name">Christ KELI</div>
+  <div class="info">Master IA · Université d'Avignon · 2025</div>
+</div>
+
+<h1>&#9632; MDP — Simulation Interactive</h1>
+<p class="subtitle">
+  Transitions stochastiques (80/10/10) &nbsp;·&nbsp; gamma=0.9 &nbsp;·&nbsp; epsilon=1e-6
+</p>
+
+<!-- Algorithm selector -->
+<div id="algo-selector">
+  <button class="algo-btn active-vi" id="btn-vi" onclick="switchAlgo('VI')">
+    &#9654; Value Iteration
+  </button>
+  <button class="algo-btn" id="btn-pi" onclick="switchAlgo('PI')">
+    &#8635; Policy Iteration
+  </button>
+</div>
+
+<!-- Comparison bar -->
+<div id="cmp-bar">
+  <div class="cmp-card vi-card">
+    <span class="cmp-title">Value Iteration</span>
+    <span class="cmp-val vi-color"><span id="cmp-vi-iter">—</span> iter.</span>
+    <span style="font-size:0.78rem;color:var(--muted);">V*(1,1) = <span id="cmp-vi-v11" class="vi-color">—</span></span>
+    <span style="font-size:0.78rem;color:var(--muted);">Temps : <span id="cmp-vi-time" class="vi-color">—</span></span>
+  </div>
+  <div class="cmp-card eq-card" style="justify-content:center;align-items:center;text-align:center;">
+    <span class="cmp-title">Politiques</span>
+    <span class="cmp-val eq-color" id="cmp-eq">—</span>
+    <span style="font-size:0.72rem;color:var(--muted);">identiques ?</span>
+  </div>
+  <div class="cmp-card pi-card">
+    <span class="cmp-title">Policy Iteration</span>
+    <span class="cmp-val pi-color"><span id="cmp-pi-iter">—</span> iter.</span>
+    <span style="font-size:0.78rem;color:var(--muted);">V*(1,1) = <span id="cmp-pi-v11" class="pi-color">—</span></span>
+    <span style="font-size:0.78rem;color:var(--muted);">Temps : <span id="cmp-pi-time" class="pi-color">—</span></span>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Grid -->
+  <div id="grid-wrap">
+    <div id="grid-title">
+      <span>Grille 3x4 &nbsp;·&nbsp; <span id="lbl-iter-info">—</span></span>
+      <span style="display:flex;gap:8px;align-items:center;">
+        <span id="algo-tag">VI</span>
+        <span id="episode-badge">Episode 1</span>
+      </span>
+    </div>
+    <div style="position:relative; display:inline-block;">
+      <div id="grid"></div>
+      <canvas id="trail-canvas"
+        style="position:absolute;top:0;left:0;pointer-events:none;z-index:5;"></canvas>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div id="stats-panel">
+    <div class="stat-block">
+      <h3>Algorithme actif</h3>
+      <div class="stat-row">
+        <span class="lbl">Methode</span>
+        <span class="val" id="s-algo-name" style="color:var(--accent);">Value Iteration</span>
+      </div>
+      <div class="stat-row">
+        <span class="lbl">Iterations</span>
+        <span class="val va" id="s-algo-iter">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="lbl">Temps calcul</span>
+        <span class="val va" id="s-algo-time">—</span>
+      </div>
+    </div>
+
+    <div class="stat-block">
+      <h3>Navigation</h3>
+      <div class="stat-row"><span class="lbl">Etape</span>       <span class="val va" id="s-step">0</span></div>
+      <div class="stat-row"><span class="lbl">Etat actuel</span> <span class="val vw" id="s-state">—</span></div>
+      <div class="stat-row"><span class="lbl">V*(etat)</span>    <span class="val vg" id="s-vstar">—</span></div>
+      <div class="stat-row"><span class="lbl">Action pi*</span>  <span class="val vy" id="s-action">—</span></div>
+    </div>
+
+    <div class="stat-block">
+      <h3>Recompenses</h3>
+      <div class="stat-row"><span class="lbl">Immediate</span>  <span class="val" id="s-reward">0</span></div>
+      <div class="stat-row"><span class="lbl">Cumulee</span>    <span class="val vy" id="s-cumrew">0.00</span></div>
+      <div id="reward-bar-bg"><div id="reward-bar" style="width:0%;background:var(--green)"></div></div>
+    </div>
+
+    <div class="stat-block">
+      <h3>Parametres MDP</h3>
+      <div class="stat-row"><span class="lbl">gamma</span>        <span class="val va" id="s-gamma">0.9</span></div>
+      <div class="stat-row"><span class="lbl">|S| etats</span>    <span class="val">11</span></div>
+      <div class="stat-row"><span class="lbl">V*(1,1)</span>      <span class="val vg" id="s-v11">—</span></div>
+    </div>
+
+    <div class="stat-block">
+      <h3>Session</h3>
+      <div class="stat-row"><span class="lbl">Episodes</span>         <span class="val" id="s-ep-count">0</span></div>
+      <div class="stat-row"><span class="lbl">Taux de succes</span>   <span class="val vg" id="s-win-rate">—</span></div>
+      <div class="stat-row"><span class="lbl">Longueur moy.</span>    <span class="val" id="s-avg-len">—</span></div>
+    </div>
+
+    <div class="goal-msg" id="goal-msg">OBJECTIF ATTEINT !</div>
+  </div>
+
+</div>
+
+<!-- Controls -->
+<div id="controls">
+  <button id="btn-play" onclick="togglePlay()">&#9654; Lancer</button>
+  <button onclick="stepOnce()">&#9197; Pas a pas</button>
+  <button id="btn-reset" onclick="resetEpisode()">&#8635; Nouvel episode</button>
+
+  <div class="ctrl-group">
+    <label>Vitesse <span id="lbl-speed">500ms</span></label>
+    <input type="range" id="speed" min="100" max="1500" value="500" step="100"
+           oninput="setSpeed(this.value)">
+  </div>
+
+  <div class="ctrl-group">
+    <label>gamma = <span id="lbl-gamma">0.9</span></label>
+    <input type="range" id="gamma-slider" min="0.1" max="0.99" value="0.9" step="0.01"
+           oninput="setGamma(this.value)">
+  </div>
+</div>
+
+<div id="legend">
+  <div class="leg-item"><div class="leg-color" style="background:#2d6a2d"></div>V* elevee (bon)</div>
+  <div class="leg-item"><div class="leg-color" style="background:#7a2020"></div>V* basse (risquee)</div>
+  <div class="leg-item"><div class="leg-color" style="background:var(--yellow);border-color:var(--yellow)"></div>Objectif +1</div>
+  <div class="leg-item"><div class="leg-color" style="background:var(--red);border-color:var(--red)"></div>Piege -1</div>
+  <div class="leg-item" style="color:var(--accent)">Robot = politique active</div>
+  <div class="leg-item" style="color:var(--accent)">VI</div>
+  <span style="color:var(--muted)">vs</span>
+  <div class="leg-item" style="color:var(--purple)">PI</div>
+</div>
+
+<div id="footer">
+  <span style="color:var(--accent);font-weight:bold;font-size:0.95rem;">Christ KELI</span>
+  &nbsp;·&nbsp; Master Informatique — Parcours Intelligence Artificielle
+  &nbsp;·&nbsp; Universite d'Avignon &nbsp;·&nbsp; 2025<br>
+  <span style="font-size:0.72rem;">
+    TP 4 — Processus de Decision Markovien
+    &nbsp;·&nbsp; Value Iteration &amp; Policy Iteration
+  </span>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// MDP — meme algorithme que le notebook Python tp4.ipynb
+// ════════════════════════════════════════════════════════════════
+
+const N_ROWS = 3, N_COLS = 4;
+let GAMMA = 0.9;
+const EPSILON = 1e-6;
+const OBSTACLE = [2, 2];
+const REWARDS  = { '3,4': 1.0, '2,4': -1.0 };
+
+const ACTIONS   = ['N','S','E','O'];
+const DIRS      = { N:[1,0], S:[-1,0], E:[0,1], O:[0,-1] };
+const ARR       = { N:'↑', S:'↓', E:'→', O:'←' };
+const TRANS_PROB = {
+  N:{N:0.8,E:0.1,O:0.1}, S:{S:0.8,E:0.1,O:0.1},
+  E:{E:0.8,N:0.1,S:0.1}, O:{O:0.8,N:0.1,S:0.1},
+};
+
+const STATES = [];
+for (let x=1;x<=N_ROWS;x++)
+  for (let y=1;y<=N_COLS;y++)
+    if (!(x===OBSTACLE[0]&&y===OBSTACLE[1])) STATES.push([x,y]);
+const N_S = STATES.length, N_A = ACTIONS.length;
+const S2I = {};
+STATES.forEach(([x,y],i)=>{ S2I[`${x},${y}`]=i; });
+
+function isValid(x,y){
+  return x>=1&&x<=N_ROWS&&y>=1&&y<=N_COLS&&!(x===OBSTACLE[0]&&y===OBSTACLE[1]);
+}
+function nextState(x,y,dir){
+  const [dx,dy]=DIRS[dir]; const nx=x+dx,ny=y+dy;
+  return isValid(nx,ny)?[nx,ny]:[x,y];
+}
+
+// ── Build P[j][i][a]  (same as Python) ──────────────────────
+function buildP(){
+  const P=Array.from({length:N_S},()=>Array.from({length:N_S},()=>new Float64Array(N_A)));
+  STATES.forEach(([x,y],i)=>{
+    ACTIONS.forEach((a,ai)=>{
+      Object.entries(TRANS_PROB[a]).forEach(([d,p])=>{
+        const [nx,ny]=nextState(x,y,d);
+        P[S2I[`${nx},${ny}`]][i][ai]+=p;
+      });
+    });
+  });
+  return P;
+}
+
+// ── Value Iteration ──────────────────────────────────────────
+// V_new[i] = R[i] + gamma * max_a( sum_j P[j][i][a] * V[j] )
+function valueIteration(P,R,gamma,eps){
+  const t0=performance.now();
+  let V=new Float64Array(N_S); let iters=0;
+  for(let it=0;it<10000;it++){
+    iters++;
+    const Qmax=new Float64Array(N_S);
+    for(let i=0;i<N_S;i++){
+      let best=-Infinity;
+      for(let a=0;a<N_A;a++){
+        let q=0; for(let j=0;j<N_S;j++) q+=P[j][i][a]*V[j];
+        if(q>best) best=q;
+      }
+      Qmax[i]=best;
+    }
+    const Vn=R.map((r,i)=>r+gamma*Qmax[i]);
+    const delta=Math.max(...V.map((v,i)=>Math.abs(Vn[i]-v)));
+    V=new Float64Array(Vn);
+    if(delta<eps) break;
+  }
+  const policy=new Int32Array(N_S);
+  for(let i=0;i<N_S;i++){
+    let best=-Infinity, bestA=0;
+    for(let a=0;a<N_A;a++){
+      let q=0; for(let j=0;j<N_S;j++) q+=P[j][i][a]*V[j];
+      if(q>best){best=q;bestA=a;}
+    }
+    policy[i]=bestA;
+  }
+  return {V, policy, iters, ms:(performance.now()-t0).toFixed(1)};
+}
+
+// ── Policy Iteration ─────────────────────────────────────────
+// Etape A: resout (I - gamma*P^pi) v = R  (Gauss-Seidel iteratif ici)
+// Etape B: pi_new = argmax_a sum_j P[j][i][a] * V[j]
+function policyIteration(P,R,gamma){
+  const t0=performance.now();
+  let policy=new Int32Array(N_S);  // initialisation : toujours N
+  let iters=0;
+  for(let it=0;it<1000;it++){
+    iters++;
+    // -- Etape A : evaluation exacte par systeme lineaire (Gauss-Seidel) ---
+    // (I - gamma*P^pi) v = R
+    // On resout iterativement : v[i] = R[i] + gamma * sum_j P[j][i][pi[i]] * v[j]
+    let V=new Float64Array(N_S);
+    for(let sweep=0;sweep<2000;sweep++){
+      let maxDelta=0;
+      for(let i=0;i<N_S;i++){
+        let s=0; for(let j=0;j<N_S;j++) s+=P[j][i][policy[i]]*V[j];
+        const vn=R[i]+gamma*s;
+        maxDelta=Math.max(maxDelta,Math.abs(vn-V[i]));
+        V[i]=vn;
+      }
+      if(maxDelta<1e-9) break;
+    }
+    // -- Etape B : amelioration ---
+    const policyNew=new Int32Array(N_S);
+    for(let i=0;i<N_S;i++){
+      let best=-Infinity, bestA=0;
+      for(let a=0;a<N_A;a++){
+        let q=0; for(let j=0;j<N_S;j++) q+=P[j][i][a]*V[j];
+        if(q>best){best=q;bestA=a;}
+      }
+      policyNew[i]=bestA;
+    }
+    // -- Etape C : convergence ---
+    let same=true;
+    for(let i=0;i<N_S;i++) if(policyNew[i]!==policy[i]){same=false;break;}
+    policy=policyNew;
+    if(same) break;
+  }
+  // Calcul final de V sous pi*
+  let V=new Float64Array(N_S);
+  for(let sweep=0;sweep<3000;sweep++){
+    let maxD=0;
+    for(let i=0;i<N_S;i++){
+      let s=0; for(let j=0;j<N_S;j++) s+=P[j][i][policy[i]]*V[j];
+      const vn=R[i]+gamma*s; maxD=Math.max(maxD,Math.abs(vn-V[i])); V[i]=vn;
+    }
+    if(maxD<1e-9) break;
+  }
+  return {V, policy, iters, ms:(performance.now()-t0).toFixed(1)};
+}
+
+// ════════════════════════════════════════════════════════════════
+// ETAT GLOBAL
+// ════════════════════════════════════════════════════════════════
+let P_mat, R_vec;
+let vi_result, pi_result;
+let currentAlgo = 'VI';   // 'VI' ou 'PI'
+let mdp;                   // result actif
+
+let robotState=[1,1]; let stepCount=0; let cumReward=0;
+let isPlaying=false; let timer=null; let interval=500;
+let epCount=0, wins=0, epLengths=[];
+let rng=makeRNG(42); let path=[[1,1]]; let reachedGoal=false;
+
+const CELL_PX=110, GAP_PX=6;
+
+// ── Seeded RNG (Mulberry32) ──────────────────────────────────
+function makeRNG(seed){
+  let s=seed>>>0;
+  return ()=>{ s|=0; s=s+0x6D2B79F5|0;
+    let t=Math.imul(s^s>>>15,1|s);
+    t=t+Math.imul(t^t>>>7,61|t)^t;
+    return((t^t>>>14)>>>0)/4294967296; };
+}
+
+function sampleDir(a){
+  const e=Object.entries(TRANS_PROB[a]); let r=rng(), cum=0;
+  for(const [d,p] of e){cum+=p;if(r<cum)return d;}
+  return e[e.length-1][0];
+}
+
+// ── init ─────────────────────────────────────────────────────
+function init(){
+  P_mat = buildP();
+  R_vec = STATES.map(([x,y])=>REWARDS[`${x},${y}`]??0);
+  computeBoth();
+  buildGridDOM();
+  resetEpisode();
+}
+
+function computeBoth(){
+  vi_result = valueIteration(P_mat, R_vec, GAMMA, EPSILON);
+  pi_result = policyIteration(P_mat, R_vec, GAMMA);
+  mdp = (currentAlgo==='VI') ? vi_result : pi_result;
+  updateCmpBar();
+}
+
+function updateCmpBar(){
+  document.getElementById('cmp-vi-iter').textContent = vi_result.iters;
+  document.getElementById('cmp-vi-v11').textContent  = vi_result.V[S2I['1,1']].toFixed(4);
+  document.getElementById('cmp-vi-time').textContent = vi_result.ms + ' ms';
+  document.getElementById('cmp-pi-iter').textContent = pi_result.iters;
+  document.getElementById('cmp-pi-v11').textContent  = pi_result.V[S2I['1,1']].toFixed(4);
+  document.getElementById('cmp-pi-time').textContent = pi_result.ms + ' ms';
+
+  let same=true;
+  for(let i=0;i<N_S;i++) if(vi_result.policy[i]!==pi_result.policy[i]){same=false;break;}
+  const eq=document.getElementById('cmp-eq');
+  eq.textContent = same ? 'OUI ✓' : 'NON ✗';
+  eq.style.color = same ? 'var(--green)' : 'var(--red)';
+}
+
+// ── Switch algorithm ─────────────────────────────────────────
+function switchAlgo(algo){
+  currentAlgo = algo;
+  mdp = (algo==='VI') ? vi_result : pi_result;
+
+  document.getElementById('btn-vi').className =
+      'algo-btn' + (algo==='VI' ? ' active-vi' : '');
+  document.getElementById('btn-pi').className =
+      'algo-btn' + (algo==='PI' ? ' active-pi' : '');
+
+  const tag = document.getElementById('algo-tag');
+  if(algo==='VI'){ tag.textContent='VI'; tag.style.background='var(--accent)'; tag.style.color='#000'; }
+  else           { tag.textContent='PI'; tag.style.background='var(--purple)'; tag.style.color='#000'; }
+
+  epCount=0; wins=0; epLengths=[];
+  buildGridDOM();
+  resetEpisode();
+}
+
+// ── Build grid DOM ────────────────────────────────────────────
+function buildGridDOM(){
+  const grid=document.getElementById('grid');
+  grid.innerHTML='';
+  const vmin=Math.min(...mdp.V), vmax=Math.max(...mdp.V);
+
+  for(let x=N_ROWS;x>=1;x--){
+    for(let y=1;y<=N_COLS;y++){
+      const div=document.createElement('div');
+      div.className='cell'; div.id=`cell-${x}-${y}`;
+
+      if(x===OBSTACLE[0]&&y===OBSTACLE[1]){
+        div.classList.add('obstacle');
+        div.innerHTML='<span class="label">MUR</span>';
+      } else {
+        const key=`${x},${y}`, i=S2I[key];
+        const v=mdp.V[i], a=ACTIONS[mdp.policy[i]];
+
+        // Heatmap
+        const t=(v-vmin)/(vmax-vmin||1);
+        const r=Math.round(120*(1-t)+26*t);
+        const g=Math.round(30*(1-t)+106*t);
+        const b=Math.round(30*(1-t)+68*t);
+        div.style.background=`rgb(${r},${g},${b})`;
+
+        div.innerHTML=`
+          <span class="coords">(${x},${y})</span>
+          <span class="v-star">V*=${v.toFixed(2)}</span>
+          <span class="arrow">${ARR[a]}</span>`;
+
+        if(REWARDS[key]!==undefined){
+          const rc=REWARDS[key]>0?'#ffd700':'#ff4757';
+          div.innerHTML+=`<span class="rew-lbl" style="color:${rc}">R=${REWARDS[key]>0?'+':''}${REWARDS[key]}</span>`;
+        }
+        if(key==='3,4'){ div.classList.add('goal'); div.style.borderColor='var(--yellow)'; }
+        if(key==='2,4')  div.classList.add('trap');
+      }
+      grid.appendChild(div);
+    }
+  }
+
+  // Algo name in title
+  const algoName = currentAlgo==='VI'?'Value Iteration':'Policy Iteration';
+  document.getElementById('lbl-iter-info').textContent =
+      `${algoName} · ${mdp.iters} iter. · ${mdp.ms} ms`;
+  document.getElementById('s-algo-name').textContent = algoName;
+  document.getElementById('s-algo-name').style.color =
+      currentAlgo==='VI' ? 'var(--accent)' : 'var(--purple)';
+  document.getElementById('s-algo-iter').textContent = mdp.iters;
+  document.getElementById('s-algo-time').textContent = mdp.ms + ' ms';
+  document.getElementById('s-gamma').textContent     = GAMMA.toFixed(2);
+  document.getElementById('s-v11').textContent       = mdp.V[S2I['1,1']].toFixed(4);
+
+  // Canvas
+  const canvas=document.getElementById('trail-canvas');
+  const W=N_COLS*(CELL_PX+GAP_PX)-GAP_PX;
+  const H=N_ROWS*(CELL_PX+GAP_PX)-GAP_PX;
+  canvas.width=W; canvas.height=H;
+  canvas.style.width=W+'px'; canvas.style.height=H+'px';
+}
+
+function cellCenter(x,y){
+  const col=y-1, row=N_ROWS-x;
+  return [col*(CELL_PX+GAP_PX)+CELL_PX/2, row*(CELL_PX+GAP_PX)+CELL_PX/2];
+}
+
+function drawTrail(){
+  const canvas=document.getElementById('trail-canvas');
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  for(let k=0;k<path.length-1;k++){
+    const [cx1,cy1]=cellCenter(...path[k]);
+    const [cx2,cy2]=cellCenter(...path[k+1]);
+    const alpha=Math.max(0.1,0.75*(k+1)/path.length);
+    const color = currentAlgo==='VI'?`rgba(0,212,255,${alpha})`:`rgba(192,132,252,${alpha})`;
+    ctx.beginPath(); ctx.moveTo(cx1,cy1); ctx.lineTo(cx2,cy2);
+    ctx.strokeStyle=color; ctx.lineWidth=3; ctx.lineCap='round'; ctx.stroke();
+    if(k===path.length-2){
+      const angle=Math.atan2(cy2-cy1,cx2-cx1), sz=8;
+      ctx.beginPath();
+      ctx.moveTo(cx2,cy2);
+      ctx.lineTo(cx2-sz*Math.cos(angle-.4),cy2-sz*Math.sin(angle-.4));
+      ctx.lineTo(cx2-sz*Math.cos(angle+.4),cy2-sz*Math.sin(angle+.4));
+      ctx.closePath(); ctx.fillStyle=color; ctx.fill();
+    }
+  }
+}
+
+function updateRobotDOM(){
+  document.querySelectorAll('.robot-icon').forEach(e=>e.remove());
+  document.querySelectorAll('.cell').forEach(c=>c.classList.remove('robot','visited'));
+  path.forEach(([x,y])=>{ const c=document.getElementById(`cell-${x}-${y}`); if(c) c.classList.add('visited'); });
+  const [rx,ry]=robotState;
+  const cell=document.getElementById(`cell-${rx}-${ry}`);
+  if(cell){
+    cell.classList.add('robot'); cell.classList.remove('visited');
+    const icon=document.createElement('div');
+    icon.className='robot-icon'; icon.textContent='🤖';
+    cell.appendChild(icon);
+  }
+  drawTrail();
+}
+
+function updateStats(){
+  const [x,y]=robotState; const key=`${x},${y}`;
+  const i=S2I[key]??S2I['3,4'];
+  const v=mdp.V[i], a=ACTIONS[mdp.policy[i]];
+  const r=REWARDS[key]??0;
+
+  document.getElementById('s-step').textContent   = stepCount;
+  document.getElementById('s-state').textContent  = `(${x},${y})`;
+  document.getElementById('s-vstar').textContent  = v.toFixed(4);
+  document.getElementById('s-action').textContent = ARR[a];
+  document.getElementById('s-cumrew').textContent = cumReward.toFixed(2);
+  document.getElementById('s-gamma').textContent  = GAMMA.toFixed(2);
+  document.getElementById('lbl-gamma').textContent= GAMMA.toFixed(2);
+
+  const rewEl=document.getElementById('s-reward');
+  rewEl.textContent = r!==0?(r>0?`+${r}`:r):'0';
+  rewEl.className   = 'val '+(r>0?'vg':r<0?'vr':'vw');
+
+  const pct=Math.min(100,Math.max(0,(cumReward+5)/10*100));
+  document.getElementById('reward-bar').style.width      = pct+'%';
+  document.getElementById('reward-bar').style.background = cumReward>=0?'var(--green)':'var(--red)';
+
+  document.getElementById('s-ep-count').textContent = epCount;
+  if(epCount>0){
+    document.getElementById('s-win-rate').textContent = Math.round(wins/epCount*100)+'%';
+    const avg=epLengths.reduce((a,b)=>a+b,0)/epLengths.length;
+    document.getElementById('s-avg-len').textContent  = avg.toFixed(1);
+  }
+  document.getElementById('goal-msg').style.display = reachedGoal?'block':'none';
+  document.getElementById('episode-badge').textContent = `Episode ${epCount+1}`;
+}
+
+function doStep(){
+  if(reachedGoal){ resetEpisode(); return; }
+  const [x,y]=robotState; const key=`${x},${y}`;
+  if(S2I[key]===undefined) return;
+  const a=ACTIONS[mdp.policy[S2I[key]]];
+  const eff=sampleDir(a);
+  const [nx,ny]=nextState(x,y,eff);
+  const r=REWARDS[`${nx},${ny}`]??0;
+  robotState=[nx,ny]; stepCount++; cumReward+=r; path.push([nx,ny]);
+  updateRobotDOM(); updateStats();
+  const done=(nx===3&&ny===4)||(nx===2&&ny===4)||stepCount>=60;
+  if(done){
+    reachedGoal=true; epCount++;
+    if(nx===3&&ny===4) wins++;
+    epLengths.push(stepCount);
+    updateStats();
+    if(isPlaying) setTimeout(resetEpisode, nx===3&&ny===4?1800:1200);
+  }
+}
+
+function resetEpisode(){
+  robotState=[1,1]; stepCount=0; cumReward=0;
+  path=[[1,1]]; reachedGoal=false;
+  rng=makeRNG(Date.now()&0xffffffff);
+  document.getElementById('goal-msg').style.display='none';
+  const c=document.getElementById('trail-canvas').getContext('2d');
+  c.clearRect(0,0,9999,9999);
+  updateRobotDOM(); updateStats();
+}
+
+function stepOnce(){ if(!isPlaying) doStep(); }
+
+function togglePlay(){
+  isPlaying=!isPlaying;
+  document.getElementById('btn-play').textContent=isPlaying?'⏸ Pause':'▶ Lancer';
+  if(isPlaying) scheduleStep(); else clearTimeout(timer);
+}
+function scheduleStep(){ if(!isPlaying)return; doStep(); timer=setTimeout(scheduleStep,interval); }
+function setSpeed(v){ interval=parseInt(v); document.getElementById('lbl-speed').textContent=v+'ms'; }
+
+function setGamma(v){
+  GAMMA=parseFloat(v);
+  document.getElementById('lbl-gamma').textContent=GAMMA.toFixed(2);
+  const was=isPlaying; if(was) togglePlay();
+  computeBoth();
+  epCount=0; wins=0; epLengths=[];
+  buildGridDOM(); resetEpisode();
+  if(was) togglePlay();
+}
+
+window.addEventListener('load', init);
+</script>
+</body>
+</html>
