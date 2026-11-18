@@ -1,3 +1,11 @@
+<p align="center">
+  <a href="README.md"><b>English</b></a>
+  &nbsp;·&nbsp;
+  <a href="README.fr.md">Français</a>
+  &nbsp;·&nbsp;
+  <a href="README.es.md">Español</a>
+</p>
+
 # Markov Decision Process — Value Iteration & Policy Iteration
 
 > M1 Informatique — Parcours Intelligence Artificielle · Université d'Avignon · Mai 2025
